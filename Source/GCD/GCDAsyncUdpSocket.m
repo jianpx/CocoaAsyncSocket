@@ -27,6 +27,7 @@
 #import <net/if.h>
 #import <sys/socket.h>
 #import <sys/types.h>
+#import <netinet6/in6.h>
 
 
 #if 0
@@ -2885,32 +2886,59 @@ enum GCDAsyncUdpSocketConfig
 		
 		if (useIPv4)
 		{
-			int status = bind(socket4FD, (struct sockaddr *)[interface4 bytes], (socklen_t)[interface4 length]);
-			if (status == -1)
-			{
-				[self closeSockets];
-				
-				NSString *reason = @"Error in bind() function";
-				err = [self errnoErrorWithReason:reason];
-				
-				return_from_block;
-			}
+            if (interface == nil) {
+                int status = bind(socket4FD, (struct sockaddr *)[interface4 bytes], (socklen_t)[interface4 length]);
+                if (status == -1)
+                {
+                    [self closeSockets];
+                    
+                    NSString *reason = @"Error in ipv4 bind() function";
+                    err = [self errnoErrorWithReason:reason];
+                    
+                    return_from_block;
+                }
+            } else {
+                //fix issue that running in iOS vpn target, call bind and sendto will raise "Can't assign requested address".
+                int index = if_nametoindex([interface UTF8String]);
+                int suc = setsockopt(socket4FD, IPPROTO_IP, IP_BOUND_IF, &index, sizeof(index));
+                if (suc == -1) {
+                    [self closeSockets];
+                    
+                    NSString *reason = @"When ipv4 bind, error in setsockopt() function";
+                    err = [self errnoErrorWithReason:reason];
+                    
+                    return_from_block;
+                }
+            }
 		}
 		
 		if (useIPv6)
 		{
-			int status = bind(socket6FD, (struct sockaddr *)[interface6 bytes], (socklen_t)[interface6 length]);
-			if (status == -1)
-			{
-				[self closeSockets];
-				
-				NSString *reason = @"Error in bind() function";
-				err = [self errnoErrorWithReason:reason];
-				
-				return_from_block;
-			}
+            if (interface == nil) {
+                int status = bind(socket6FD, (struct sockaddr *)[interface6 bytes], (socklen_t)[interface6 length]);
+                if (status == -1)
+                {
+                    [self closeSockets];
+                    
+                    NSString *reason = @"Error in ipv6 bind() function";
+                    err = [self errnoErrorWithReason:reason];
+                    
+                    return_from_block;
+                }
+            } else {
+                int index = if_nametoindex([interface UTF8String]);
+                int suc = setsockopt(socket6FD, IPPROTO_IPV6, IPV6_BOUND_IF, &index, sizeof(index));
+                if (suc == -1) {
+                    [self closeSockets];
+
+                    NSString *reason = @"When ipv4 bind, error in setsockopt() function";
+                    err = [self errnoErrorWithReason:reason];
+
+                    return_from_block;
+                }
+            }
+
 		}
-		
 		// Update flags
 		
 		flags |= kDidBind;
